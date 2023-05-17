@@ -1,8 +1,9 @@
 import React from 'react';
+import PageContent from '../components/PageContent';
 
 const HomePage = () => {
   return (
-    <h1>Home Page</h1>
+    <PageContent title="Welcome!">Browse all our amazing evetns!</PageContent>
   )
 }
 
