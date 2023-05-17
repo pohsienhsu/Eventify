@@ -1,111 +1,60 @@
-const express = require('express');
+const { v4: generateId } = require('uuid');
 
-const { getAll, get, add, replace, remove } = require('../data/event');
-const {
-  isValidText,
-  isValidDate,
-  isValidImageUrl,
-} = require('../util/validation');
+const { NotFoundError } = require('../util/errors');
+const { readData, writeData } = require('./util');
 
-const router = express.Router();
-
-router.get('/', async (req, res, next) => {
-  try {
-    const events = await getAll();
-    res.json({ events: events });
-  } catch (error) {
-    next(error);
+async function getAll() {
+  const storedData = await readData();
+  if (!storedData.events) {
+    throw new NotFoundError('Could not find any events.');
   }
-});
+  return storedData.events;
+}
 
-router.get('/:id', async (req, res, next) => {
-  try {
-    const event = await get(req.params.id);
-    res.json({ event: event });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/', async (req, res, next) => {
-  const data = req.body;
-
-  let errors = {};
-
-  if (!isValidText(data.title)) {
-    errors.title = 'Invalid title.';
+async function get(id) {
+  const storedData = await readData();
+  if (!storedData.events || storedData.events.length === 0) {
+    throw new NotFoundError('Could not find any events.');
   }
 
-  if (!isValidText(data.description)) {
-    errors.description = 'Invalid description.';
+  const event = storedData.events.find((ev) => ev.id === id);
+  if (!event) {
+    throw new NotFoundError('Could not find event for id ' + id);
   }
 
-  if (!isValidDate(data.date)) {
-    errors.date = 'Invalid date.';
+  return event;
+}
+
+async function add(data) {
+  const storedData = await readData();
+  storedData.events.unshift({ ...data, id: generateId() });
+  await writeData(storedData);
+}
+
+async function replace(id, data) {
+  const storedData = await readData();
+  if (!storedData.events || storedData.events.length === 0) {
+    throw new NotFoundError('Could not find any events.');
   }
 
-  if (!isValidImageUrl(data.image)) {
-    errors.image = 'Invalid image.';
+  const index = storedData.events.findIndex((ev) => ev.id === id);
+  if (index < 0) {
+    throw new NotFoundError('Could not find event for id ' + id);
   }
 
-  if (Object.keys(errors).length > 0) {
-    return res.status(422).json({
-      message: 'Adding the event failed due to validation errors.',
-      errors,
-    });
-  }
+  storedData.events[index] = { ...data, id };
 
-  try {
-    await add(data);
-    res.status(201).json({ message: 'Event saved.', event: data });
-  } catch (error) {
-    next(error);
-  }
-});
+  await writeData(storedData);
+}
 
-router.patch('/:id', async (req, res, next) => {
-  const data = req.body;
+async function remove(id) {
+  const storedData = await readData();
+  const updatedData = storedData.events.filter((ev) => ev.id !== id);
+  await writeData({ ...storedData, events: updatedData });
+}
 
-  let errors = {};
-
-  if (!isValidText(data.title)) {
-    errors.title = 'Invalid title.';
-  }
-
-  if (!isValidText(data.description)) {
-    errors.description = 'Invalid description.';
-  }
-
-  if (!isValidDate(data.date)) {
-    errors.date = 'Invalid date.';
-  }
-
-  if (!isValidImageUrl(data.image)) {
-    errors.image = 'Invalid image.';
-  }
-
-  if (Object.keys(errors).length > 0) {
-    return res.status(422).json({
-      message: 'Updating the event failed due to validation errors.',
-      errors,
-    });
-  }
-
-  try {
-    await replace(req.params.id, data);
-    res.json({ message: 'Event updated.', event: data });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.delete('/:id', async (req, res, next) => {
-  try {
-    await remove(req.params.id);
-    res.json({ message: 'Event deleted.' });
-  } catch (error) {
-    next(error);
-  }
-});
-
-module.exports = router;
+exports.getAll = getAll;
+exports.get = get;
+exports.add = add;
+exports.replace = replace;
+exports.remove = remove;
